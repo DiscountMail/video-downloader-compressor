@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Instagram Downloader & Compressor</title>
+    <!-- Styles are the same as before -->
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1 { text-align: center; }
+        #controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        #instaUrl { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        #getVideoBtn { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #getVideoBtn:disabled { background-color: #cccccc; }
+        #log { margin-top: 20px; padding: 10px; background-color: #e9ecef; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; min-height: 50px; }
+        #downloadLink { display: none; text-align: center; margin-top: 20px; padding: 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Instagram Downloader & Compressor</h1>
+    <div id="controls">
+        <input type="text" id="instaUrl" placeholder="https://www.instagram.com/reel/.../">
+        <button id="getVideoBtn">Get & Compress</button>
+    </div>
+    <div id="log">Status updates will appear here...</div>
+    <a href="#" id="downloadLink">Download Compressed Video</a>
+
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script>
+        const { FFmpeg } = FFmpeg;
+        let ffmpeg;
+
+        // DOM elements
+        const urlInput = document.getElementById('instaUrl');
+        const getBtn = document.getElementById('getVideoBtn');
+        const logEl = document.getElementById('log');
+        const downloadLink = document.getElementById('downloadLink');
+
+        const log = (message) => { logEl.textContent = message; console.log(message); };
+
+        // Helper function to convert Base64 string back to binary data
+        const base64ToUint8Array = (base64) => {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes;
+        };
+
+        const loadFFmpeg = async () => { /* ... same as before ... */ };
+
+        const startProcess = async () => {
+            getBtn.disabled = true;
+            downloadLink.style.display = 'none';
+
+            try {
+                // Step 1: Call our own secure backend function
+                log('Asking our server to fetch the video...');
+                const response = await fetch('/.netlify/functions/getVideo', {
+                    method: 'POST',
+                    body: JSON.stringify({ instaUrl: urlInput.value })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+
+                log('✅ Video data received. Decoding...');
+                const videoData = base64ToUint8Array(data.videoData);
+                
+                // Step 2: Use FFmpeg to compress the video
+                await ffmpeg.writeFile('input.mp4', videoData);
+                log('Starting compression... This can take a while.');
+                
+                await ffmpeg.exec(['-i', 'input.mp4', '-vcodec', 'libx264', '-crf', '28', '-ac', '1', 'output.mp4']);
+                log('✅ Compression finished!');
+
+                // Step 3: Provide the download link
+                const compressedData = await ffmpeg.readFile('output.mp4');
+                const compressedUrl = URL.createObjectURL(new Blob([compressedData.buffer], { type: 'video/mp4' }));
+                
+                downloadLink.href = compressedUrl;
+                downloadLink.download = `${data.fileName || 'compressed'}.mp4`;
+                downloadLink.style.display = 'block';
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            } finally {
+                getBtn.disabled = false;
+            }
+        };
+        
+        // --- The rest of the script is the same ---
+        const init = async () => {
+            ffmpeg = new FFmpeg();
+            ffmpeg.on('log', ({ message }) => {
+                if (message.includes('frame=')) { logEl.textContent = `Compressing: ${message}`; }
+            });
+            log('Loading libraries...');
+            await ffmpeg.load({ coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js' });
+            log('Ready. Paste a URL and click "Get & Compress"');
+            getBtn.disabled = false;
+        };
+        
+        getBtn.addEventListener('click', startProcess);
+        getBtn.disabled = true;
+        init();
+    </script>
+</body>
+</html>
