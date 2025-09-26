@@ -1,3 +1,0 @@
-[functions]
-  external_node_modules = ["apify-client", "node-fetch"]
-  node_bundler = "esbuild"
