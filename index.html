@@ -23,14 +23,12 @@
     <div id="log">Status updates will appear here...</div>
     <a href="#" id="downloadLink">Download Compressed Video</a>
 
-    <!-- This script tag loads the FFmpeg library -->
+    <!-- This script tag loads the FFmpeg library. Our code will wait for it to finish. -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
 
-    <!-- This is our main application script -->
     <script>
-        // We wrap everything in this event listener.
-        // The code inside will only run AFTER the entire page is loaded.
-        document.addEventListener('DOMContentLoaded', () => {
+        // Use window.onload to ensure EVERYTHING, including external scripts, is loaded.
+        window.onload = () => {
             const urlInput = document.getElementById('instaUrl');
             const getBtn = document.getElementById('getVideoBtn');
             const logEl = document.getElementById('log');
@@ -57,7 +55,8 @@
                 getBtn.disabled = true;
                 log('Initializing...');
 
-                // Correctly access the FFmpeg class from the global window object
+                // The FFmpeg library creates a global variable called "FFmpeg".
+                // We access the class from it. This is the correct way.
                 const { FFmpeg } = window.FFmpeg;
                 ffmpeg = new FFmpeg();
 
@@ -77,15 +76,15 @@
             };
 
             const startProcess = async () => {
-                if (!urlInput.value) {
-                    log('Please paste an Instagram URL first.');
+                if (!urlInput.value.includes('instagram.com')) {
+                    log('Please paste a valid Instagram URL.');
                     return;
                 }
                 getBtn.disabled = true;
                 downloadLink.style.display = 'none';
 
                 try {
-                    log('Asking our server to fetch the video...');
+                    log('Contacting our function to fetch the video...');
                     const response = await fetch('/.netlify/functions/getVideo', {
                         method: 'POST',
                         body: JSON.stringify({ instaUrl: urlInput.value })
@@ -94,11 +93,11 @@
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || 'The server returned an error.');
                     
-                    log('✅ Video data received. Decoding...');
+                    log('✅ Video received. Decoding...');
                     const videoData = base64ToUint8Array(data.videoData);
                     
                     await ffmpeg.writeFile('input.mp4', videoData);
-                    log('Starting compression... This can take a while.');
+                    log('Starting compression... This will take time.');
                     
                     await ffmpeg.exec(['-i', 'input.mp4', '-vcodec', 'libx264', '-crf', '28', '-ac', '1', 'output.mp4']);
                     log('✅ Compression finished!');
@@ -118,9 +117,10 @@
                 }
             };
 
+            // Attach the click listener and start the initialization process.
             getBtn.addEventListener('click', startProcess);
-            initialize(); // Start the initialization process
-        });
+            initialize();
+        };
     </script>
 </body>
 </html>
